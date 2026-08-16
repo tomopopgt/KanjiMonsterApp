@@ -4,11 +4,11 @@ import Combine
 import AVFoundation
 import UIKit
 
-// MARK: - 漢字問題データ構造
-struct KanjiQuestion: Hashable {
-    let kanji: String          // 表示する漢字（例: "犬", "新幹線"）
-    let reading: String        // 正解の読み（例: "いぬ", "しんかんせん"）
-    let category: Int          // 0:どうぶつ, 1:のりもの, 2:たべもの, 3:きょうりゅう, 4:ファンタジー
+// MARK: - 漢字問題データ構造 (Codableを追加してJSON対応に)
+struct KanjiQuestion: Codable, Hashable {
+    let kanji: String          // 表示する漢字
+    let reading: String        // 正解の読み
+    let category: Int          // 0〜24のカテゴリ番号
     let difficulty: Int        // 0:かんたん, 1:ふつう, 2:むずかしい
 }
 
@@ -56,9 +56,9 @@ class GameManager: ObservableObject {
     @Published var achievements: Set<String> = []
     
     // 設定
-    @Published var selectedCategory = 0 // 0:どうぶつ, 1:のりもの, 2:たべもの, 3:きょうりゅう, 4:ファンタジー, 5:ランダム
-    @Published var selectedDifficulty = 0 // 0:かんたん, 1:ふつう, 2:むずかしい, 3:ランダム
-    @Published var playMode = 0 // 0:のんびり, 1:10もんタイム, 2:にがて克服
+    @Published var selectedCategory = 0
+    @Published var selectedDifficulty = 0
+    @Published var playMode = 0
     @Published var isMuted = false
     
     // バトル状態
@@ -68,6 +68,9 @@ class GameManager: ObservableObject {
     @Published var currentCategoryName = "どうぶつ"
     @Published var choices: [String] = []
     @Published var score = 0; @Published var combo = 0; @Published var isFever = false
+    
+    // 直前に出題した漢字（連続かぶり防止用）
+    private var lastKanji: String = ""
     
     // タイムアタック
     @Published var timeAttackCount = 0; @Published var timeAttackElapsedTime: Double = 0.0
@@ -86,69 +89,17 @@ class GameManager: ObservableObject {
     let monsters = ["👾", "🐉", "🤖", "👻", "🦄", "🦁", "🦖", "🦅", "👑", "🪼", "🐙", "🦈", "🥷", "🧙‍♂️", "🐺", "🧛‍♂️", "💣", "🌌"]
     let monsterNames = ["パズルモン", "ドラゴン", "ロボット", "おばけちゃん", "ユニコーン", "キングライオン", "ティラノくん", "イーグルキング", "かんじ神ゼウス", "クラゲっち", "クラーケン", "ホオジロサメ", "ニンジャ", "大魔導士", "ウルフマン", "ヴァンパイア", "メガトン爆弾", "宇宙大魔王"]
     
-    // MARK: - 漢字問題マスターデータ
-    let categoryNames = ["どうぶつ 🦁", "のりもの 🚗", "たべもの 🍕", "きょうりゅう 🦖", "ファンタジー ⚔️"]
-    
-    let kanjiDatabase: [KanjiQuestion] = [
-        // 🦁 どうぶつ
-        KanjiQuestion(kanji: "犬", reading: "いぬ", category: 0, difficulty: 0),
-        KanjiQuestion(kanji: "猫", reading: "ねこ", category: 0, difficulty: 0),
-        KanjiQuestion(kanji: "鳥", reading: "とり", category: 0, difficulty: 0),
-        KanjiQuestion(kanji: "魚", reading: "さかな", category: 0, difficulty: 0),
-        KanjiQuestion(kanji: "馬", reading: "うま", category: 0, difficulty: 0),
-        KanjiQuestion(kanji: "象", reading: "ぞう", category: 0, difficulty: 1),
-        KanjiQuestion(kanji: "虎", reading: "とら", category: 0, difficulty: 1),
-        KanjiQuestion(kanji: "熊", reading: "くま", category: 0, difficulty: 1),
-        KanjiQuestion(kanji: "狐", reading: "きつね", category: 0, difficulty: 2),
-        KanjiQuestion(kanji: "狼", reading: "おおかみ", category: 0, difficulty: 2),
-        KanjiQuestion(kanji: "海豚", reading: "いるか", category: 0, difficulty: 2),
-
-        // 🚗 のりもの
-        KanjiQuestion(kanji: "車", reading: "くるま", category: 1, difficulty: 0),
-        KanjiQuestion(kanji: "船", reading: "ふね", category: 1, difficulty: 0),
-        KanjiQuestion(kanji: "電車", reading: "でんしゃ", category: 1, difficulty: 0),
-        KanjiQuestion(kanji: "自転車", reading: "じてんしゃ", category: 1, difficulty: 1),
-        KanjiQuestion(kanji: "飛行機", reading: "ひこうき", category: 1, difficulty: 1),
-        KanjiQuestion(kanji: "新幹線", reading: "しんかんせん", category: 1, difficulty: 1),
-        KanjiQuestion(kanji: "消防車", reading: "しょうぼうしゃ", category: 1, difficulty: 2),
-        KanjiQuestion(kanji: "救急車", reading: "きゅうきゅうしゃ", category: 1, difficulty: 2),
-        KanjiQuestion(kanji: "宇宙船", reading: "うちゅうせん", category: 1, difficulty: 2),
-
-        // 🍕 たべもの
-        KanjiQuestion(kanji: "水", reading: "みず", category: 2, difficulty: 0),
-        KanjiQuestion(kanji: "米", reading: "こめ", category: 2, difficulty: 0),
-        KanjiQuestion(kanji: "肉", reading: "にく", category: 2, difficulty: 0),
-        KanjiQuestion(kanji: "卵", reading: "たまご", category: 2, difficulty: 1),
-        KanjiQuestion(kanji: "野菜", reading: "やさい", category: 2, difficulty: 1),
-        KanjiQuestion(kanji: "果物", reading: "くだもの", category: 2, difficulty: 1),
-        KanjiQuestion(kanji: "砂糖", reading: "さとう", category: 2, difficulty: 2),
-        KanjiQuestion(kanji: "和菓子", reading: "わがし", category: 2, difficulty: 2),
-        KanjiQuestion(kanji: "唐揚げ", reading: "からあげ", category: 2, difficulty: 2),
-
-        // 🦖 きょうりゅう・大昔
-        KanjiQuestion(kanji: "骨", reading: "ほね", category: 3, difficulty: 0),
-        KanjiQuestion(kanji: "卵", reading: "たまご", category: 3, difficulty: 0),
-        KanjiQuestion(kanji: "爪", reading: "つめ", category: 3, difficulty: 1),
-        KanjiQuestion(kanji: "牙", reading: "きば", category: 3, difficulty: 1),
-        KanjiQuestion(kanji: "翼", reading: "つばさ", category: 3, difficulty: 1),
-        KanjiQuestion(kanji: "化石", reading: "かせき", category: 3, difficulty: 1),
-        KanjiQuestion(kanji: "恐竜", reading: "きょうりゅう", category: 3, difficulty: 2),
-        KanjiQuestion(kanji: "噴火", reading: "ふんか", category: 3, difficulty: 2),
-        KanjiQuestion(kanji: "隕石", reading: "いんせき", category: 3, difficulty: 2),
-
-        // ⚔️ ファンタジー・ぼうけん
-        KanjiQuestion(kanji: "剣", reading: "つるぎ", category: 4, difficulty: 0),
-        KanjiQuestion(kanji: "城", reading: "しろ", category: 4, difficulty: 0),
-        KanjiQuestion(kanji: "光", reading: "ひかり", category: 4, difficulty: 0),
-        KanjiQuestion(kanji: "炎", reading: "ほのお", category: 4, difficulty: 1),
-        KanjiQuestion(kanji: "氷", reading: "こおり", category: 4, difficulty: 1),
-        KanjiQuestion(kanji: "魔法", reading: "まほう", category: 4, difficulty: 1),
-        KanjiQuestion(kanji: "勇者", reading: "ゆうしゃ", category: 4, difficulty: 1),
-        KanjiQuestion(kanji: "魔王", reading: "まおう", category: 4, difficulty: 1),
-        KanjiQuestion(kanji: "宝石", reading: "ほうせき", category: 4, difficulty: 2),
-        KanjiQuestion(kanji: "雷撃", reading: "らいげき", category: 4, difficulty: 2),
-        KanjiQuestion(kanji: "結界", reading: "けっかい", category: 4, difficulty: 2)
+    // 全25ジャンル
+    let categoryNames = [
+        "どうぶつ 🦁", "こんちゅう 🦋", "のりもの 🚗", "たべもの 🍕", "きょうりゅう 🦖",
+        "ファンタジー ⚔️", "てつどう 🚃", "げんそ 🧪", "サカナ 🐟", "ほし 🌟",
+        "はな 🌸", "ペット 🐶", "とり 🦅", "かわのいきもの 🐸", "どうぶつえん 🐘",
+        "てんたい 🔭", "かがく 🔬", "きしょう ☁️", "鉱物 💎", "しょくぶつ 🌿",
+        "スポーツ ⚽️", "アート 🎨", "ゲーム 🎮", "料理 🍳", "歴史 📜"
     ]
+    
+    // JSONから読み込む空の配列（コード直書きデータはここに置き換わりました）
+    @Published var kanjiDatabase: [KanjiQuestion] = []
     
     var isBoss: Bool { (monsterIndex + 1) % 10 == 0 }
     
@@ -172,6 +123,17 @@ class GameManager: ObservableObject {
         loadData()
         recordPlayDay()
         setupTimer()
+        loadKanjiDatabase() // 起動時にJSONを読み込む
+    }
+    
+    func loadKanjiDatabase() {
+        guard let url = Bundle.main.url(forResource: "kanji_data", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let questions = try? JSONDecoder().decode([KanjiQuestion].self, from: data) else {
+            print("JSONの読み込みに失敗しました")
+            return
+        }
+        self.kanjiDatabase = questions
     }
     
     func setupAudioSession() {
@@ -224,6 +186,7 @@ class GameManager: ObservableObject {
         timeAttackCount = 0; timeAttackElapsedTime = 0.0
         timeAttackStartTime = Date()
         isPlaying = true
+        lastKanji = ""
         generateQuestion()
     }
     
@@ -246,28 +209,36 @@ class GameManager: ObservableObject {
     }
 
     func generateQuestion() {
+        if kanjiDatabase.isEmpty { return } // 読み込み失敗時の安全対策
+        
         if playMode == 2 && !wrongQuestions.isEmpty {
             let q = wrongQuestions.randomElement()!
             currentKanji = q.kanji
             currentCorrectReading = q.reading
             currentCategoryName = q.categoryName
         } else {
-            let cat = (selectedCategory == 5) ? Int.random(in: 0...4) : selectedCategory
+            // ランダムは番号25
+            let cat = (selectedCategory == 25) ? Int.random(in: 0...24) : selectedCategory
             let diff = (selectedDifficulty == 3) ? Int.random(in: 0...2) : selectedDifficulty
             
+            // 選択カテゴリと難易度で絞り込み
             let filtered = kanjiDatabase.filter { item in
                 item.category == cat && item.difficulty == diff
             }
-            
             let pool = filtered.isEmpty ? kanjiDatabase.filter { $0.category == cat } : filtered
-            let q = pool.randomElement() ?? kanjiDatabase.randomElement()!
+            let finalPool = pool.isEmpty ? kanjiDatabase : pool
+            
+            // 直前と同じ漢字を除外するロジック
+            let candidates = finalPool.filter { $0.kanji != lastKanji }
+            let q = candidates.randomElement() ?? finalPool.randomElement()!
             
             currentKanji = q.kanji
             currentCorrectReading = q.reading
-            currentCategoryName = categoryNames[q.category]
+            currentCategoryName = (q.category < categoryNames.count) ? categoryNames[q.category] : "かんじ"
+            lastKanji = q.kanji
         }
 
-        // ダミー選択肢の生成
+        // ダミー選択肢（誤答）の生成
         var dummyChoices: Set<String> = [currentCorrectReading]
         let allReadings = kanjiDatabase.map { $0.reading }
         
@@ -488,9 +459,19 @@ struct OpeningView: View {
 
                 Spacer()
                 Button { game.startAdventure() } label: {
-                    HStack(spacing: 8) { Image(systemName: "sparkles"); Text("⚔️ ぼうけん を はじめる！"); Image(systemName: "sparkles") }
-                        .font(.system(size: 26, weight: .black, design: .rounded)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 76)
-                        .background(RoundedRectangle(cornerRadius: 22).fill(LinearGradient(colors: [.orange, .red], startPoint: .top, endPoint: .bottom)).shadow(color: .orange.opacity(0.6), radius: 8, y: 4))
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                        Text("⚔️ ぼうけん を はじめる！")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                        Image(systemName: "sparkles")
+                    }
+                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 72)
+                    .background(RoundedRectangle(cornerRadius: 22).fill(LinearGradient(colors: [.orange, .red], startPoint: .top, endPoint: .bottom)).shadow(color: .orange.opacity(0.6), radius: 8, y: 4))
                 }
                 .padding(.horizontal, 24).scaleEffect(isPulsing ? 1.06 : 0.98)
                 Spacer()
@@ -579,7 +560,21 @@ struct HeaderStatusCard: View {
     
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) { Text("👑 ランク \(game.rank) : \(game.rankTitle)").font(.title3).bold().foregroundColor(Color(red: 0.9, green: 0.5, blue: 0.1)); if game.prestigeCount > 0 { Text("🎖️ てんせい \(game.prestigeCount) かいめ").font(.subheadline).bold().foregroundColor(.purple) } }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("👑 ランク \(game.rank) : \(game.rankTitle)")
+                    .font(.title3)
+                    .bold()
+                    .foregroundColor(Color(red: 0.9, green: 0.5, blue: 0.1))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                
+                if game.prestigeCount > 0 {
+                    Text("🎖️ てんせい \(game.prestigeCount) かいめ")
+                        .font(.subheadline)
+                        .bold()
+                        .foregroundColor(.purple)
+                }
+            }
             Spacer()
             Button { game.isMuted.toggle() } label: { Image(systemName: game.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.title3).foregroundColor(game.isMuted ? .gray : .blue).padding(10).background(Circle().fill(Color.gray.opacity(0.2))) }
             VStack(alignment: .trailing, spacing: 4) { Text("⭐ \(game.stars) スター").font(.headline).bold().foregroundColor(EyeFriendlyTheme.textPrimary(scheme)); Text("✨ \(game.prestigePoints) PP").font(.headline).bold().foregroundColor(.purple) }
@@ -653,14 +648,33 @@ struct HomeBattleView: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("📚 ジャンル（カテゴリ）").font(.headline).bold().foregroundColor(EyeFriendlyTheme.textPrimary(scheme))
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        SelectionButton(title: "🦁 どうぶつ", isSelected: game.selectedCategory == 0, activeColors: blueTheme) { game.selectedCategory = 0 }
-                        SelectionButton(title: "🚗 のりもの", isSelected: game.selectedCategory == 1, activeColors: blueTheme) { game.selectedCategory = 1 }
-                        SelectionButton(title: "🍕 たべもの", isSelected: game.selectedCategory == 2, activeColors: blueTheme) { game.selectedCategory = 2 }
-                        SelectionButton(title: "🦖 きょうりゅう", isSelected: game.selectedCategory == 3, activeColors: blueTheme) { game.selectedCategory = 3 }
-                        SelectionButton(title: "⚔️ ファンタジー", isSelected: game.selectedCategory == 4, activeColors: blueTheme) { game.selectedCategory = 4 }
-                        SelectionButton(title: "🎲 ランダム", isSelected: game.selectedCategory == 5, activeColors: blueTheme) { game.selectedCategory = 5 }
+                    
+                    ScrollView(showsIndicators: true) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            ForEach(0..<game.categoryNames.count, id: \.self) { index in
+                                SelectionButton(title: game.categoryNames[index], isSelected: game.selectedCategory == index, activeColors: blueTheme) {
+                                    game.selectedCategory = index
+                                }
+                            }
+                            
+                            SelectionButton(title: "🎲 ランダム", isSelected: game.selectedCategory == 25, activeColors: deepPurpleTheme) {
+                                game.selectedCategory = 25
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
                     }
+                    .frame(maxHeight: 260)
+                    .background(EyeFriendlyTheme.cardBg(scheme))
+                    .cornerRadius(16)
+                    .overlay(
+                        VStack {
+                            LinearGradient(colors: [EyeFriendlyTheme.cardBg(scheme), Color.clear], startPoint: .top, endPoint: .bottom).frame(height: 12)
+                            Spacer()
+                            LinearGradient(colors: [Color.clear, EyeFriendlyTheme.cardBg(scheme)], startPoint: .top, endPoint: .bottom).frame(height: 12)
+                        }
+                        .allowsHitTesting(false)
+                    )
                 }.padding(.horizontal)
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -677,6 +691,8 @@ struct HomeBattleView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "play.fill")
                         Text(game.playMode == 1 ? "⏱️ タイムアタック スタート！" : "⚔️ バトル スタート！")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .font(.system(size: 22, weight: .black, design: .rounded))
                     .foregroundColor(.white)
@@ -702,7 +718,7 @@ struct MistakeNoteView: View {
         ScrollView {
             VStack(spacing: 16) {
                 if game.wrongQuestions.isEmpty {
-                    VStack(spacing: 16) { Text("🎉").font(.system(size: 80)); Text("に发てな かんじは ないよ！すごい！").font(.title2).bold().foregroundColor(.green) }.padding(40)
+                    VStack(spacing: 16) { Text("🎉").font(.system(size: 80)); Text("にがてな かんじは ないよ！すごい！").font(.title2).bold().foregroundColor(.green) }.padding(40)
                 } else {
                     Button { game.playMode = 2; game.startGame() } label: { HStack { Image(systemName: "flame.fill"); Text("にがて を こくふく バトル！ (\(game.wrongQuestions.count)問)") }.font(.title2).bold().foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 64).background(Color.red).cornerRadius(20) }.padding(.horizontal)
                     ForEach(game.wrongQuestions, id: \.self) { q in
@@ -770,7 +786,20 @@ struct BattleView: View {
             
             VStack(spacing: 12) {
                 HStack {
-                    Button(action: game.quitGame) { HStack(spacing: 4) { Image(systemName: "house.fill"); Text("もどる") }.font(.title3).bold().foregroundColor(.white).padding(.horizontal, 16).padding(.vertical, 10).background(Capsule().fill(Color.red)) }
+                    Button(action: game.quitGame) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "house.fill")
+                            Text("もどる")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                        }
+                        .font(.title3)
+                        .bold()
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.red))
+                    }
                     Spacer()
                     if game.playMode == 1 { Text(String(format: "⏱️ %.1f秒 (%d/10)", game.timeAttackElapsedTime, game.timeAttackCount)).font(.system(.title3, design: .monospaced)).bold().foregroundColor(.purple).padding(10).background(Capsule().fill(EyeFriendlyTheme.cardBg(scheme))) } else if game.combo > 1 { Text(game.isFever ? "🔥 FEVER 2倍! (\(game.combo)連)" : "🔥 \(game.combo) れんぞく！").font(.title3).bold().foregroundColor(game.isFever ? .red : .orange).padding(8).background(Capsule().fill(Color.yellow.opacity(0.4))) }
                     Spacer()
@@ -797,7 +826,6 @@ struct BattleView: View {
 
                 ZStack { if game.showEffect { Text(game.effectText).font(.system(size: 38, weight: .black)).foregroundColor(game.effectColor) } }.frame(height: 50)
 
-                // 漢字の出題部分
                 VStack(spacing: 8) {
                     Text("この かんじ の よみかた は？")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
@@ -814,7 +842,6 @@ struct BattleView: View {
 
                 Spacer()
 
-                // ひらがなの選択肢（4択）
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 20) {
                     ForEach(game.choices, id: \.self) { choice in
                         Button { game.checkAnswer(choice) } label: {
