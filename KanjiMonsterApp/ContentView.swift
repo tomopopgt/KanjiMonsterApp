@@ -4,7 +4,7 @@ import Combine
 import AVFoundation
 import UIKit
 
-// MARK: - 漢字問題データ構造 (Codableを追加してJSON対応に)
+// MARK: - 漢字問題データ構造
 struct KanjiQuestion: Codable, Hashable {
     let kanji: String          // 表示する漢字
     let reading: String        // 正解の読み
@@ -98,7 +98,6 @@ class GameManager: ObservableObject {
         "スポーツ ⚽️", "アート 🎨", "ゲーム 🎮", "料理 🍳", "歴史 📜"
     ]
     
-    // JSONから読み込む空の配列（コード直書きデータはここに置き換わりました）
     @Published var kanjiDatabase: [KanjiQuestion] = []
     
     var isBoss: Bool { (monsterIndex + 1) % 10 == 0 }
@@ -123,7 +122,7 @@ class GameManager: ObservableObject {
         loadData()
         recordPlayDay()
         setupTimer()
-        loadKanjiDatabase() // 起動時にJSONを読み込む
+        loadKanjiDatabase()
     }
     
     func loadKanjiDatabase() {
@@ -209,7 +208,7 @@ class GameManager: ObservableObject {
     }
 
     func generateQuestion() {
-        if kanjiDatabase.isEmpty { return } // 読み込み失敗時の安全対策
+        if kanjiDatabase.isEmpty { return }
         
         if playMode == 2 && !wrongQuestions.isEmpty {
             let q = wrongQuestions.randomElement()!
@@ -217,18 +216,15 @@ class GameManager: ObservableObject {
             currentCorrectReading = q.reading
             currentCategoryName = q.categoryName
         } else {
-            // ランダムは番号25
             let cat = (selectedCategory == 25) ? Int.random(in: 0...24) : selectedCategory
             let diff = (selectedDifficulty == 3) ? Int.random(in: 0...2) : selectedDifficulty
             
-            // 選択カテゴリと難易度で絞り込み
             let filtered = kanjiDatabase.filter { item in
                 item.category == cat && item.difficulty == diff
             }
             let pool = filtered.isEmpty ? kanjiDatabase.filter { $0.category == cat } : filtered
             let finalPool = pool.isEmpty ? kanjiDatabase : pool
             
-            // 直前と同じ漢字を除外するロジック
             let candidates = finalPool.filter { $0.kanji != lastKanji }
             let q = candidates.randomElement() ?? finalPool.randomElement()!
             
@@ -238,7 +234,6 @@ class GameManager: ObservableObject {
             lastKanji = q.kanji
         }
 
-        // ダミー選択肢（誤答）の生成
         var dummyChoices: Set<String> = [currentCorrectReading]
         let allReadings = kanjiDatabase.map { $0.reading }
         
@@ -378,20 +373,24 @@ class GameManager: ObservableObject {
     }
 }
 
-// MARK: - 🎨 目に優しいカラーパレット
+// MARK: - 🎨 洗練されたカラーパレット（ダークモード最適化）
 struct EyeFriendlyTheme {
     static func bgGradient(_ scheme: ColorScheme) -> [Color] {
         scheme == .dark ?
-            [Color(red: 0.12, green: 0.14, blue: 0.18), Color(red: 0.18, green: 0.20, blue: 0.26)] :
+            [Color(red: 0.07, green: 0.09, blue: 0.13), Color(red: 0.12, green: 0.14, blue: 0.20)] :
             [Color(red: 0.96, green: 0.95, blue: 0.91), Color(red: 0.92, green: 0.94, blue: 0.96)]
     }
     
     static func cardBg(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 0.22, green: 0.24, blue: 0.30) : Color.white
+        scheme == .dark ? Color(red: 0.15, green: 0.18, blue: 0.24) : Color.white
     }
     
     static func textPrimary(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 0.92, green: 0.93, blue: 0.96) : Color(red: 0.20, green: 0.22, blue: 0.28)
+        scheme == .dark ? Color(red: 0.96, green: 0.97, blue: 0.99) : Color(red: 0.20, green: 0.22, blue: 0.28)
+    }
+    
+    static func textSecondary(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(red: 0.62, green: 0.67, blue: 0.76) : Color.gray
     }
 }
 
@@ -445,9 +444,9 @@ struct OpeningView: View {
                 VStack(spacing: 14) {
                     Text("⚔️ かんじ 👑").font(.system(size: 38, weight: .black, design: .rounded)).foregroundColor(.orange)
                     Text("モンスターズ").font(.system(size: 56, weight: .black, design: .rounded)).foregroundColor(EyeFriendlyTheme.textPrimary(scheme)).shadow(color: scheme == .dark ? .black : .white, radius: 4).minimumScaleFactor(0.8)
-                    Text("〜 かんじ の よみかた で モンスター を たおせ！ 〜").font(.system(size: 16, weight: .bold, design: .rounded)).foregroundColor(.gray)
+                    Text("〜 かんじ の よみかた で モンスター を たおせ！ 〜").font(.system(size: 16, weight: .bold, design: .rounded)).foregroundColor(EyeFriendlyTheme.textSecondary(scheme))
                 }
-                .padding(.vertical, 32).padding(.horizontal, 24).background(RoundedRectangle(cornerRadius: 30).fill(EyeFriendlyTheme.cardBg(scheme)).shadow(color: .black.opacity(0.15), radius: 10, y: 5))
+                .padding(.vertical, 32).padding(.horizontal, 24).background(RoundedRectangle(cornerRadius: 30).fill(EyeFriendlyTheme.cardBg(scheme)).shadow(color: .black.opacity(scheme == .dark ? 0.4 : 0.15), radius: 10, y: 5))
                 .scaleEffect(isBouncing ? 1.05 : 0.95)
 
                 HStack(spacing: 18) {
@@ -527,24 +526,24 @@ struct ParentReportView: View {
                 Text("👨‍👩‍👦 保護者向けレポート").font(.title2).bold().foregroundColor(EyeFriendlyTheme.textPrimary(scheme))
                 
                 HStack(spacing: 20) {
-                    VStack { Text("プレイ日数").font(.subheadline).foregroundColor(.gray); Text("\(game.playDays.count) 日").font(.title).bold().foregroundColor(.orange) }
+                    VStack { Text("プレイ日数").font(.subheadline).foregroundColor(EyeFriendlyTheme.textSecondary(scheme)); Text("\(game.playDays.count) 日").font(.title).bold().foregroundColor(.orange) }
                     Divider().frame(height: 40)
-                    VStack { Text("総クリア数").font(.subheadline).foregroundColor(.gray); Text("\(game.correctQuestions) 問").font(.title).bold().foregroundColor(.blue) }
-                }.padding(20).frame(maxWidth: .infinity).background(EyeFriendlyTheme.cardBg(scheme)).cornerRadius(16).shadow(color: .black.opacity(0.05), radius: 4)
+                    VStack { Text("総クリア数").font(.subheadline).foregroundColor(EyeFriendlyTheme.textSecondary(scheme)); Text("\(game.correctQuestions) 問").font(.title).bold().foregroundColor(.blue) }
+                }.padding(20).frame(maxWidth: .infinity).background(EyeFriendlyTheme.cardBg(scheme)).cornerRadius(16).shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.05), radius: 4)
                 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack { Image(systemName: "sparkles"); Text("AI ぶんせき アドバイス") }.font(.headline).bold().foregroundColor(.purple)
+                    HStack { Image(systemName: "sparkles"); Text("AI ぶんせき アドバイス") }.font(.headline).bold().foregroundColor(scheme == .dark ? Color(red: 0.8, green: 0.6, blue: 1.0) : .purple)
                     Text(analysisMessage).font(.body).foregroundColor(EyeFriendlyTheme.textPrimary(scheme))
                 }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(Color.purple.opacity(scheme == .dark ? 0.25 : 0.1)).cornerRadius(16)
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("🏅 かくとくトロフィー (\(game.achievements.count)個)").font(.headline).bold().foregroundColor(.gray)
+                    Text("🏅 かくとくトロフィー (\(game.achievements.count)個)").font(.headline).bold().foregroundColor(EyeFriendlyTheme.textSecondary(scheme))
                     if game.achievements.isEmpty {
-                        Text("まだトロフィーはありません。ゲームを遊んでゲットしよう！").font(.subheadline).foregroundColor(.gray).padding(.vertical, 10)
+                        Text("まだトロフィーはありません。ゲームを遊んでゲットしよう！").font(.subheadline).foregroundColor(EyeFriendlyTheme.textSecondary(scheme)).padding(.vertical, 10)
                     } else {
                         ForEach(Array(game.achievements), id: \.self) { title in
                             HStack { Text("🏆").font(.title2); Text(title).font(.headline).bold().foregroundColor(EyeFriendlyTheme.textPrimary(scheme)) }
-                            .padding(14).frame(maxWidth: .infinity, alignment: .leading).background(EyeFriendlyTheme.cardBg(scheme)).cornerRadius(12).shadow(color: .black.opacity(0.05), radius: 2)
+                            .padding(14).frame(maxWidth: .infinity, alignment: .leading).background(EyeFriendlyTheme.cardBg(scheme)).cornerRadius(12).shadow(color: .black.opacity(scheme == .dark ? 0.2 : 0.05), radius: 2)
                         }
                     }
                 }
@@ -564,7 +563,7 @@ struct HeaderStatusCard: View {
                 Text("👑 ランク \(game.rank) : \(game.rankTitle)")
                     .font(.title3)
                     .bold()
-                    .foregroundColor(Color(red: 0.9, green: 0.5, blue: 0.1))
+                    .foregroundColor(Color(red: 0.95, green: 0.6, blue: 0.15))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                 
@@ -572,13 +571,13 @@ struct HeaderStatusCard: View {
                     Text("🎖️ てんせい \(game.prestigeCount) かいめ")
                         .font(.subheadline)
                         .bold()
-                        .foregroundColor(.purple)
+                        .foregroundColor(scheme == .dark ? Color(red: 0.8, green: 0.6, blue: 1.0) : .purple)
                 }
             }
             Spacer()
-            Button { game.isMuted.toggle() } label: { Image(systemName: game.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.title3).foregroundColor(game.isMuted ? .gray : .blue).padding(10).background(Circle().fill(Color.gray.opacity(0.2))) }
-            VStack(alignment: .trailing, spacing: 4) { Text("⭐ \(game.stars) スター").font(.headline).bold().foregroundColor(EyeFriendlyTheme.textPrimary(scheme)); Text("✨ \(game.prestigePoints) PP").font(.headline).bold().foregroundColor(.purple) }
-        }.padding(.horizontal, 16).padding(.vertical, 14).background(EyeFriendlyTheme.cardBg(scheme)).shadow(color: .black.opacity(0.08), radius: 3, y: 2)
+            Button { game.isMuted.toggle() } label: { Image(systemName: game.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.title3).foregroundColor(game.isMuted ? .gray : .blue).padding(10).background(Circle().fill(Color.gray.opacity(scheme == .dark ? 0.3 : 0.2))) }
+            VStack(alignment: .trailing, spacing: 4) { Text("⭐ \(game.stars) スター").font(.headline).bold().foregroundColor(EyeFriendlyTheme.textPrimary(scheme)); Text("✨ \(game.prestigePoints) PP").font(.headline).bold().foregroundColor(scheme == .dark ? Color(red: 0.8, green: 0.6, blue: 1.0) : .purple) }
+        }.padding(.horizontal, 16).padding(.vertical, 14).background(EyeFriendlyTheme.cardBg(scheme)).shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 3, y: 2)
     }
 }
 
@@ -586,13 +585,13 @@ struct HeaderStatusCard: View {
 struct SelectionButton: View {
     let title: String
     let isSelected: Bool
-    var activeColors: [Color] = [Color(red: 0.2, green: 0.5, blue: 0.95), Color(red: 0.35, green: 0.3, blue: 0.85)]
+    var activeColors: [Color] = [Color(red: 0.2, green: 0.55, blue: 0.95), Color(red: 0.35, green: 0.35, blue: 0.85)]
     let action: () -> Void
     @Environment(\.colorScheme) var scheme
     
     private var primaryThemeColor: Color { activeColors.first ?? Color.blue }
-    private var strokeColor: Color { isSelected ? primaryThemeColor.opacity(0.8) : Color.gray.opacity(scheme == .dark ? 0.3 : 0.15) }
-    private var shadowColor: Color { isSelected ? primaryThemeColor.opacity(0.4) : Color.black.opacity(0.04) }
+    private var strokeColor: Color { isSelected ? primaryThemeColor.opacity(0.9) : Color.white.opacity(scheme == .dark ? 0.08 : 0.15) }
+    private var shadowColor: Color { isSelected ? primaryThemeColor.opacity(0.5) : Color.black.opacity(scheme == .dark ? 0.2 : 0.04) }
 
     var body: some View {
         Button(action: action) {
@@ -728,7 +727,7 @@ struct MistakeNoteView: View {
                                 Text("よみ: \(q.reading)").font(.headline).foregroundColor(.orange)
                             }
                             Spacer()
-                            Text(q.categoryName).font(.subheadline).bold().foregroundColor(.gray)
+                            Text(q.categoryName).font(.subheadline).bold().foregroundColor(EyeFriendlyTheme.textSecondary(scheme))
                         }.padding(20).background(EyeFriendlyTheme.cardBg(scheme)).cornerRadius(16).padding(.horizontal)
                     }
                 }
@@ -747,7 +746,7 @@ struct EncyclopediaView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                 ForEach(0..<game.monsters.count, id: \.self) { idx in
                     let isUnlocked = game.unlockedMonsters.contains(idx)
-                    VStack(spacing: 10) { Text(isUnlocked ? game.monsters[idx] : "❓").font(.system(size: 70)).opacity(isUnlocked ? 1 : 0.3); Text(isUnlocked ? game.monsterNames[idx] : "？？？？？").font(.headline).bold().foregroundColor(isUnlocked ? EyeFriendlyTheme.textPrimary(scheme) : .gray) }.frame(maxWidth: .infinity).frame(height: 130).background(EyeFriendlyTheme.cardBg(scheme)).cornerRadius(18)
+                    VStack(spacing: 10) { Text(isUnlocked ? game.monsters[idx] : "❓").font(.system(size: 70)).opacity(isUnlocked ? 1 : 0.3); Text(isUnlocked ? game.monsterNames[idx] : "？？？？？").font(.headline).bold().foregroundColor(isUnlocked ? EyeFriendlyTheme.textPrimary(scheme) : EyeFriendlyTheme.textSecondary(scheme)) }.frame(maxWidth: .infinity).frame(height: 130).background(EyeFriendlyTheme.cardBg(scheme)).cornerRadius(18)
                 }
             }.padding()
         }
@@ -801,7 +800,7 @@ struct BattleView: View {
                         .background(Capsule().fill(Color.red))
                     }
                     Spacer()
-                    if game.playMode == 1 { Text(String(format: "⏱️ %.1f秒 (%d/10)", game.timeAttackElapsedTime, game.timeAttackCount)).font(.system(.title3, design: .monospaced)).bold().foregroundColor(.purple).padding(10).background(Capsule().fill(EyeFriendlyTheme.cardBg(scheme))) } else if game.combo > 1 { Text(game.isFever ? "🔥 FEVER 2倍! (\(game.combo)連)" : "🔥 \(game.combo) れんぞく！").font(.title3).bold().foregroundColor(game.isFever ? .red : .orange).padding(8).background(Capsule().fill(Color.yellow.opacity(0.4))) }
+                    if game.playMode == 1 { Text(String(format: "⏱️ %.1f秒 (%d/10)", game.timeAttackElapsedTime, game.timeAttackCount)).font(.system(.title3, design: .monospaced)).bold().foregroundColor(scheme == .dark ? Color(red: 0.8, green: 0.6, blue: 1.0) : .purple).padding(10).background(Capsule().fill(EyeFriendlyTheme.cardBg(scheme))) } else if game.combo > 1 { Text(game.isFever ? "🔥 FEVER 2倍! (\(game.combo)連)" : "🔥 \(game.combo) れんぞく！").font(.title3).bold().foregroundColor(game.isFever ? .red : .orange).padding(8).background(Capsule().fill(Color.yellow.opacity(0.4))) }
                     Spacer()
                     HStack(spacing: 6) { Text("⭐ \(game.stars)"); Text("得点: \(game.score)") }.font(.title3).bold().foregroundColor(EyeFriendlyTheme.textPrimary(scheme)).padding(10).background(Capsule().fill(EyeFriendlyTheme.cardBg(scheme)))
                 }.padding(.horizontal).padding(.top, 12)
@@ -829,7 +828,7 @@ struct BattleView: View {
                 VStack(spacing: 8) {
                     Text("この かんじ の よみかた は？")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(.gray)
+                        .foregroundColor(EyeFriendlyTheme.textSecondary(scheme))
                     Text(game.currentKanji)
                         .font(.system(size: 72, weight: .black, design: .rounded))
                         .foregroundColor(EyeFriendlyTheme.textPrimary(scheme))
@@ -838,7 +837,7 @@ struct BattleView: View {
                 }
                 .padding(.vertical, 16)
                 .padding(.horizontal, 30)
-                .background(RoundedRectangle(cornerRadius: 28).fill(EyeFriendlyTheme.cardBg(scheme)).shadow(radius: 6))
+                .background(RoundedRectangle(cornerRadius: 28).fill(EyeFriendlyTheme.cardBg(scheme)).shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.1), radius: 6))
 
                 Spacer()
 
@@ -869,7 +868,7 @@ struct UpgradeRow: View {
     @Environment(\.colorScheme) var scheme
     @State private var isGlowing = false
     var body: some View {
-        Button(action: action) { HStack { VStack(alignment: .leading, spacing: 6) { Text(title).font(.title3).bold().foregroundColor(canAfford ? EyeFriendlyTheme.textPrimary(scheme) : .gray); Text(subtitle).font(.subheadline).foregroundColor(.gray) }; Spacer(); Text(costText).font(.title3).bold().foregroundColor(canAfford ? .orange : .gray) }.padding(20).background(canAfford ? Color.yellow.opacity(scheme == .dark ? 0.2 : 0.15) : EyeFriendlyTheme.cardBg(scheme)).cornerRadius(16).overlay(RoundedRectangle(cornerRadius: 16).stroke(canAfford ? Color.orange.opacity(isGlowing ? 0.8 : 0.2) : Color.clear, lineWidth: 3)).shadow(color: canAfford ? Color.orange.opacity(isGlowing ? 0.4 : 0.0) : Color.black.opacity(0.05), radius: 5, y: 3) }.disabled(!canAfford)
+        Button(action: action) { HStack { VStack(alignment: .leading, spacing: 6) { Text(title).font(.title3).bold().foregroundColor(canAfford ? EyeFriendlyTheme.textPrimary(scheme) : EyeFriendlyTheme.textSecondary(scheme)); Text(subtitle).font(.subheadline).foregroundColor(EyeFriendlyTheme.textSecondary(scheme)) }; Spacer(); Text(costText).font(.title3).bold().foregroundColor(canAfford ? .orange : EyeFriendlyTheme.textSecondary(scheme)) }.padding(20).background(canAfford ? Color.orange.opacity(scheme == .dark ? 0.25 : 0.15) : EyeFriendlyTheme.cardBg(scheme)).cornerRadius(16).overlay(RoundedRectangle(cornerRadius: 16).stroke(canAfford ? Color.orange.opacity(isGlowing ? 0.8 : 0.3) : Color.clear, lineWidth: 3)).shadow(color: canAfford ? Color.orange.opacity(isGlowing ? 0.4 : 0.0) : Color.black.opacity(scheme == .dark ? 0.2 : 0.05), radius: 5, y: 3) }.disabled(!canAfford)
         .onAppear { withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) { isGlowing = true } }
     }
 }
