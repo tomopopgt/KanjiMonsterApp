@@ -1,43 +1,31 @@
-//
-//  KanjiMonsterAppUITests.swift
-//  KanjiMonsterAppUITests
-//
-//  Created by 81906 on 2026/08/16.
-//
-
 import XCTest
 
 final class KanjiMonsterAppUITests: XCTestCase {
 
-    override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
-        continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
-
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testGameStartFlow() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
-    }
-
-    @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+        // 1. オープニング画面の「ぼうけん を はじめる！」ボタンを探してタップ
+        let startAdventureButton = app.buttons["⚔️ ぼうけん を はじめる！"]
+        if startAdventureButton.exists {
+            startAdventureButton.tap()
         }
+
+        // 2. メイン画面に遷移し、「バトル スタート！」ボタンが現れるか待機
+        let battleStartButton = app.buttons["⚔️ バトル スタート！"]
+        XCTAssertTrue(battleStartButton.waitForExistence(timeout: 3.0), "メイン画面にバトルスタートボタンが見つかりません")
+        
+        // 3. バトルスタートボタンをタップ
+        battleStartButton.tap()
+        
+        // 4. バトル画面へ切り替わり、「もどる」ボタンが表示されるか確認
+        let backButton = app.buttons["もどる"]
+        XCTAssertTrue(backButton.waitForExistence(timeout: 2.0), "バトル画面に正常に遷移していません")
+        
+        // 5. 「もどる」をタップして無事に設定画面に帰ってこれるか確認
+        backButton.tap()
+        XCTAssertTrue(battleStartButton.exists, "バトルからメイン画面に戻れませんでした")
     }
 }
