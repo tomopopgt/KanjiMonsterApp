@@ -8,23 +8,24 @@ final class KanjiMonsterAppTests: XCTestCase {
     func testCorrectAnswer() throws {
         let game = GameManager()
         
-        // テスト用に確実に「犬（いぬ）」が出題されるようにデータをセット
+        // 過去のセーブデータの影響を受けないように、テスト開始時点の数値を記録！
+        let initialScore = game.score
+        let initialCorrect = game.correctQuestions
+        
         game.kanjiDatabase = [
             KanjiQuestion(kanji: "犬", reading: "いぬ", category: 0, difficulty: 0)
         ]
         
         game.startGame()
-        
-        let initialScore = game.score
         let initialMonsterHP = game.monsterHP
         
-        // 正解の文字列を選択したと仮定
+        // 正解の文字列を選択
         game.checkAnswer("いぬ")
         
-        // --- XCTAssert を使って結果を検証 ---
+        // --- 検証 ---
         XCTAssertEqual(game.combo, 1, "正解したらコンボが1になること")
         XCTAssertTrue(game.score > initialScore, "正解したらスコアが増えること")
-        XCTAssertEqual(game.correctQuestions, 1, "累計正解数が1増えること")
+        XCTAssertEqual(game.correctQuestions, initialCorrect + 1, "累計正解数が今の状態から1増えること")
         XCTAssertTrue(game.monsterHP < initialMonsterHP, "モンスターのHPがダメージを受けて減ること")
     }
 
@@ -32,19 +33,22 @@ final class KanjiMonsterAppTests: XCTestCase {
     func testWrongAnswer() throws {
         let game = GameManager()
         
+        // ノートの件数も、テスト開始時点の数値を記録
+        let initialWrongCount = game.wrongQuestions.count
+        
         game.kanjiDatabase = [
             KanjiQuestion(kanji: "犬", reading: "いぬ", category: 0, difficulty: 0)
         ]
         game.startGame()
-        game.combo = 3 // すでに3連続正解している状態をシミュレート
+        game.combo = 3
         
-        // 不正解の文字列を選択したと仮定
+        // 不正解の文字列を選択
         game.checkAnswer("ねこ")
         
         // --- 検証 ---
         XCTAssertEqual(game.combo, 0, "間違えたらコンボが0にリセットされること")
         XCTAssertFalse(game.isFever, "フィーバー状態が解除されること")
-        XCTAssertEqual(game.wrongQuestions.count, 1, "にがてノートに追加されること")
-        XCTAssertEqual(game.wrongQuestions.first?.kanji, "犬", "間違えた漢字が記録されること")
+        XCTAssertEqual(game.wrongQuestions.count, initialWrongCount + 1, "にがてノートに1件追加されること")
+        XCTAssertEqual(game.wrongQuestions.last?.kanji, "犬", "間違えた漢字が一番最後に記録されること")
     }
 }

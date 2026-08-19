@@ -118,12 +118,15 @@ class GameManager: ObservableObject {
     var ppCritCost: Int { (ppCritLevel + 1) * 20 }
 
     init() {
-        setupAudioSession()
-        loadData()
-        recordPlayDay()
-        setupTimer()
-        loadKanjiDatabase()
-    }
+        // テスト環境以外（本番）のときだけ音声をセットアップする
+                if NSClassFromString("XCTest") == nil {
+                    setupAudioSession()
+                }
+                loadData()
+                recordPlayDay()
+                setupTimer()
+                loadKanjiDatabase()
+            }
     
     func loadKanjiDatabase() {
         guard let url = Bundle.main.url(forResource: "kanji_data", withExtension: "json"),
